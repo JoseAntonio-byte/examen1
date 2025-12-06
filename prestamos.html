@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Préstamos - Biblioteca Escolar</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="main-container">
+    <h2>Registro de Préstamos</h2>
+
+    <nav>
+        <a href="index.html">Panel</a>
+        <a href="socios.html">Socios</a>
+        <a href="libros.html">Libros</a>
+        <a href="prestamos.html">Préstamos</a>
+        <a href="devoluciones.html">Devoluciones</a>
+    </nav>
+
+    <form onsubmit="return false;">
+        <label for="dniSocio">DNI del socio</label>
+        <input type="text" id="dniSocio">
+
+        <label for="libroSelect">Libro</label>
+        <select id="libroSelect"></select>
+
+        <label for="ejemplarSelect">Ejemplar disponible</label>
+        <select id="ejemplarSelect"></select>
+
+        <label for="diasPrestamo">Días de préstamo</label>
+        <input type="number" id="diasPrestamo" min="1" value="7">
+
+        <button class="btn btn-block" onclick="registrarPrestamo()">Registrar préstamo</button>
+    </form>
+
+    <div id="msgPrestamo" class="message"></div>
+
+    <div class="table-wrapper">
+        <h3>Préstamos vigentes</h3>
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Socio</th>
+                <th>Ejemplar</th>
+                <th>Fecha</th>
+                <th>F. Límite</th>
+                <th>Estado</th>
+            </tr>
+            </thead>
+            <tbody id="tablaPrestamos"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function getData(key) {
+    return JSON.parse(localStorage.getItem(key) || '[]');
+}
+
+function setData(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+}
+
+function cargarLibrosYEjemplares() {
+    const libros = getData('libros');
+    const ejemplares = getData('ejemplares');
+    const selLibro = document.getElementById('libroSelect');
+    const selEjemplar = document.getElementById('ejemplarSelect');
+
+    selLibro.innerHTML = '';
+    libros.forEach(l => {
+        selLibro.innerHTML += `<option value="${l.idLibro}">${l.titulo}</option>`;
+    });
+
+    actualizarEjemplares();
+}
+
+function actualizarEjemplares() {
+    const idLibro = parseInt(document.getElementById('libroSelect').value, 10);
+    const ejemplares = getData('ejemplares');
+    const selEjemplar = document.getElementById('ejemplarSelect');
+    selEjemplar.innerHTML = '';
+
+    ejemplares
+        .filter(e => e.idLibro === idLibro && e.estadoEjemplar === 'DISPONIBLE')
+        .forEach(e => {
+            selEjemplar.innerHTML += `<option value="${e.idEjemplar}">Ejemplar #${e.idEjemplar} (DISP.)</option>`;
+        });
+}
+
+function cargarPrestamosVigentes() {
+    const prestamos = getData('prestamos');
+    const socios = getData('socios');
+    const tabla = document.getElementById('tablaPrestamos');
+    tabla.innerHTML = '';
+
+    prestamos
+        .filter(p => p.estadoPrestamo === 'VIGENTE')
+        .forEach(p => {
+            const socio = socios.find(s => s.idSocio === p.idSocio);
+            tabla.innerHTML += `
+                <tr>
+                    <td>${p.idPrestamo}</td>
+                    <td>${socio ? socio.nombre : p.idSocio}</td>
+                    <td>${p.idEjemplar}</td>
+                    <td>${p.fechaPrestamo}</td>
+                    <td>${p.fechaLimite}</td>
+                    <td>${p.estadoPrestamo}</td>
+                </tr>
+            `;
+        });
+}
+
+function registrarPrestamo() {
+    const dni = document.getElementById('dniSocio').value.trim();
+    const idLibro = parseInt(document.getElementById('libroSelect').value, 10);
+    const idEjemplar = parseInt(document.getElementById('ejemplarSelect').value, 10);
+    const dias = parseInt(document.getElementById('diasPrestamo').value, 10);
+    const msg = document.getElementById('msgPrestamo');
+    msg.className = 'message';
+
+    if (!dni || isNaN(idLibro) || isNaN(idEjemplar) || isNaN(dias) || dias <= 0) {
+        msg.textContent = 'Complete todos los campos correctamente.';
+        msg.classList.add('message-error');
+        return;
+    }
+
+    let socios = getData('socios');
+    let ejemplares = getData('ejemplares');
+    let prestamos = getData('prestamos');
+
+    const socio = socios.find(s => s.dni === dni);
+
+    if (!socio) {
+        msg.textContent = 'No existe un socio con ese DNI.';
+        msg.classList.add('message-error');
+        return;
+    }
+
+    // Validación de estado del socio
+    const hoy = new Date();
+    if (socio.estado === 'SUSPENDIDO') {
+        if (socio.suspensionHasta) {
+            const hasta = new Date(socio.suspensionHasta);
+            if (hoy <= hasta) {
+                msg.textContent = `El socio está suspendido hasta ${socio.suspensionHasta}.`;
+                msg.classList.add('message-error');
+                return;
+            } else {
+                // Levantar suspensión
+                socio.estado = 'HABILITADO';
+                socio.suspensionHasta = null;
+            }
+        } else if (socio.tieneDeteriorado) {
+            msg.textContent = 'El socio está suspendido por ejemplar deteriorado (debe reponerlo).';
+            msg.classList.add('message-error');
+            return;
+        }
+    }
+
+    // Actualizar socio (por si levantamos suspensión)
+    socios = socios.map(s => s.idSocio === socio.idSocio ? socio : s);
+
+    // Reglas de préstamo
+    const prestamosSocio = prestamos.filter(p => p.idSocio === socio.idSocio && p.estadoPrestamo === 'VIGENTE');
+    if (prestamosSocio.length >= 3) {
+        msg.textContent = 'El socio ya tiene 3 préstamos vigentes.';
+        msg.classList.add('message-error');
+        setData('socios', socios);
+        return;
+    }
+
+    const ejemplo = ejemplares.find(e => e.idEjemplar === idEjemplar);
+    if (!ejemplo || ejemplo.estadoEjemplar !== 'DISPONIBLE') {
+        msg.textContent = 'El ejemplar seleccionado no está disponible.';
+        msg.classList.add('message-error');
+        setData('socios', socios);
+        return;
+    }
+
+    const nuevoId = prestamos.length > 0 ? prestamos[prestamos.length - 1].idPrestamo + 1 : 1;
+    const fechaPrestamo = hoy.toISOString().substring(0, 10);
+    const fechaLimite = new Date(hoy.getTime() + dias * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+
+    prestamos.push({
+        idPrestamo: nuevoId,
+        idSocio: socio.idSocio,
+        idEjemplar,
+        fechaPrestamo,
+        fechaLimite,
+        fechaDevolucion: null,
+        estadoPrestamo: 'VIGENTE'
+    });
+
+    ejemplo.estadoEjemplar = 'PRESTADO';
+    ejemplares = ejemplares.map(e => e.idEjemplar === ejemplo.idEjemplar ? ejemplo : e);
+
+    setData('socios', socios);
+    setData('ejemplares', ejemplares);
+    setData('prestamos', prestamos);
+
+    msg.textContent = 'Préstamo registrado correctamente.';
+    msg.classList.add('message-success');
+
+    cargarLibrosYEjemplares();
+    cargarPrestamosVigentes();
+}
+
+document.getElementById('libroSelect').addEventListener('change', actualizarEjemplares);
+cargarLibrosYEjemplares();
+cargarPrestamosVigentes();
+</script>
+</body>
+</html>

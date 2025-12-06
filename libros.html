@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Libros - Biblioteca Escolar</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="main-container">
+    <h2>Registro de Libros</h2>
+
+    <nav>
+        <a href="index.html">Panel</a>
+        <a href="socios.html">Socios</a>
+        <a href="libros.html">Libros</a>
+        <a href="prestamos.html">Préstamos</a>
+        <a href="devoluciones.html">Devoluciones</a>
+    </nav>
+
+    <form id="formLibro" onsubmit="return false;">
+        <label for="titulo">Título</label>
+        <input type="text" id="titulo" required>
+
+        <label for="autor">Autor</label>
+        <input type="text" id="autor" required>
+
+        <label for="editorial">Editorial</label>
+        <input type="text" id="editorial" required>
+
+        <label for="categoria">Categoría</label>
+        <input type="text" id="categoria" required>
+
+        <label for="cantidad">Cantidad de ejemplares</label>
+        <input type="number" id="cantidad" min="1" value="1">
+
+        <button class="btn btn-block" onclick="registrarLibro()">Registrar libro y ejemplares</button>
+    </form>
+
+    <div id="msgLibro" class="message"></div>
+
+    <div class="table-wrapper">
+        <h3>Libros registrados</h3>
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Título</th>
+                <th>Autor</th>
+                <th>Ejemplares</th>
+            </tr>
+            </thead>
+            <tbody id="tablaLibros"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function cargarLibros() {
+    const libros = JSON.parse(localStorage.getItem('libros') || '[]');
+    const ejemplares = JSON.parse(localStorage.getItem('ejemplares') || '[]');
+    const cuerpo = document.getElementById('tablaLibros');
+    cuerpo.innerHTML = '';
+    libros.forEach(l => {
+        const cantEj = ejemplares.filter(e => e.idLibro === l.idLibro).length;
+        cuerpo.innerHTML += `
+            <tr>
+                <td>${l.idLibro}</td>
+                <td>${l.titulo}</td>
+                <td>${l.autor}</td>
+                <td>${cantEj}</td>
+            </tr>
+        `;
+    });
+}
+
+function registrarLibro() {
+    const titulo = document.getElementById('titulo').value.trim();
+    const autor = document.getElementById('autor').value.trim();
+    const editorial = document.getElementById('editorial').value.trim();
+    const categoria = document.getElementById('categoria').value.trim();
+    const cantidad = parseInt(document.getElementById('cantidad').value, 10);
+    const msg = document.getElementById('msgLibro');
+
+    msg.className = 'message';
+
+    if (!titulo || !autor || !editorial || !categoria || isNaN(cantidad) || cantidad <= 0) {
+        msg.textContent = 'Complete todos los campos correctamente.';
+        msg.classList.add('message-error');
+        return;
+    }
+
+    let libros = JSON.parse(localStorage.getItem('libros') || '[]');
+    let ejemplares = JSON.parse(localStorage.getItem('ejemplares') || '[]');
+
+    const nuevoIdLibro = libros.length > 0 ? libros[libros.length - 1].idLibro + 1 : 1;
+
+    libros.push({
+        idLibro: nuevoIdLibro,
+        titulo,
+        autor,
+        editorial,
+        categoria
+    });
+
+    // Crear ejemplares
+    let ultimoIdEjemplar = ejemplares.length > 0 ? ejemplares[ejemplares.length - 1].idEjemplar : 0;
+    for (let i = 0; i < cantidad; i++) {
+        ultimoIdEjemplar++;
+        ejemplares.push({
+            idEjemplar: ultimoIdEjemplar,
+            idLibro: nuevoIdLibro,
+            estadoEjemplar: 'DISPONIBLE'
+        });
+    }
+
+    localStorage.setItem('libros', JSON.stringify(libros));
+    localStorage.setItem('ejemplares', JSON.stringify(ejemplares));
+
+    msg.textContent = 'Libro y ejemplares registrados correctamente.';
+    msg.classList.add('message-success');
+
+    document.getElementById('formLibro').reset();
+    document.getElementById('cantidad').value = 1;
+    cargarLibros();
+}
+
+cargarLibros();
+</script>
+</body>
+</html>

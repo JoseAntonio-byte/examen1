@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Devoluciones - Biblioteca Escolar</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="main-container">
+    <h2>Registro de Devoluciones</h2>
+
+    <nav>
+        <a href="index.html">Panel</a>
+        <a href="socios.html">Socios</a>
+        <a href="libros.html">Libros</a>
+        <a href="prestamos.html">Préstamos</a>
+        <a href="devoluciones.html">Devoluciones</a>
+    </nav>
+
+    <form onsubmit="return false;">
+        <label for="prestamoSelect">Préstamo vigente</label>
+        <select id="prestamoSelect"></select>
+
+        <label for="estadoDevolucion">Estado del libro devuelto</label>
+        <select id="estadoDevolucion">
+            <option value="NORMAL">Normal</option>
+            <option value="DETERIORADO">Deteriorado</option>
+        </select>
+
+        <button class="btn btn-block" onclick="registrarDevolucion()">Registrar devolución</button>
+    </form>
+
+    <div id="msgDevolucion" class="message"></div>
+
+    <div class="table-wrapper">
+        <h3>Historial de préstamos</h3>
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Socio</th>
+                <th>Ejemplar</th>
+                <th>F. Préstamo</th>
+                <th>F. Límite</th>
+                <th>F. Devolución</th>
+                <th>Estado</th>
+            </tr>
+            </thead>
+            <tbody id="tablaHistorial"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function getData(key) {
+    return JSON.parse(localStorage.getItem(key) || '[]');
+}
+
+function setData(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+}
+
+function cargarPrestamosVigentesSelect() {
+    const prestamos = getData('prestamos');
+    const socios = getData('socios');
+    const sel = document.getElementById('prestamoSelect');
+    sel.innerHTML = '';
+
+    prestamos
+        .filter(p => p.estadoPrestamo === 'VIGENTE')
+        .forEach(p => {
+            const socio = socios.find(s => s.idSocio === p.idSocio);
+            sel.innerHTML += `
+                <option value="${p.idPrestamo}">
+                    Prestamo #${p.idPrestamo} - Socio: ${socio ? socio.nombre : p.idSocio} - Ejemplar ${p.idEjemplar}
+                </option>
+            `;
+        });
+}
+
+function cargarHistorial() {
+    const prestamos = getData('prestamos');
+    const socios = getData('socios');
+    const tabla = document.getElementById('tablaHistorial');
+    tabla.innerHTML = '';
+
+    prestamos.forEach(p => {
+        const socio = socios.find(s => s.idSocio === p.idSocio);
+        tabla.innerHTML += `
+            <tr>
+                <td>${p.idPrestamo}</td>
+                <td>${socio ? socio.nombre : p.idSocio}</td>
+                <td>${p.idEjemplar}</td>
+                <td>${p.fechaPrestamo}</td>
+                <td>${p.fechaLimite}</td>
+                <td>${p.fechaDevolucion || '-'}</td>
+                <td>${p.estadoPrestamo}</td>
+            </tr>
+        `;
+    });
+}
+
+function registrarDevolucion() {
+    const idPrestamo = parseInt(document.getElementById('prestamoSelect').value, 10);
+    const estadoDev = document.getElementById('estadoDevolucion').value;
+    const msg = document.getElementById('msgDevolucion');
+    msg.className = 'message';
+
+    if (isNaN(idPrestamo)) {
+        msg.textContent = 'No hay préstamos vigentes seleccionados.';
+        msg.classList.add('message-error');
+        return;
+    }
+
+    let prestamos = getData('prestamos');
+    let socios = getData('socios');
+    let ejemplares = getData('ejemplares');
+
+    const prestamo = prestamos.find(p => p.idPrestamo === idPrestamo);
+    if (!prestamo || prestamo.estadoPrestamo !== 'VIGENTE') {
+        msg.textContent = 'El préstamo seleccionado no es válido.';
+        msg.classList.add('message-error');
+        return;
+    }
+
+    const socio = socios.find(s => s.idSocio === prestamo.idSocio);
+    const ejemplar = ejemplares.find(e => e.idEjemplar === prestamo.idEjemplar);
+
+    const hoy = new Date();
+    const fechaHoyStr = hoy.toISOString().substring(0, 10);
+    prestamo.fechaDevolucion = fechaHoyStr;
+
+    const fechaLimite = new Date(prestamo.fechaLimite);
+    let vencido = hoy > fechaLimite;
+
+    if (estadoDev === 'DETERIORADO') {
+        ejemplar.estadoEjemplar = 'DETERIORADO';
+        socio.estado = 'SUSPENDIDO';
+        socio.tieneDeteriorado = true;
+        socio.suspensionHasta = null;
+        prestamo.estadoPrestamo = 'DEVUELTO';
+        msg.textContent = 'Devolución registrada. Ejemplar deteriorado. Socio suspendido hasta reponer.';
+        msg.classList.add('message-error');
+    } else {
+        // Estado normal
+        ejemplar.estadoEjemplar = 'DISPONIBLE';
+        if (vencido) {
+            prestamo.estadoPrestamo = 'VENCIDO';
+            socio.estado = 'SUSPENDIDO';
+            const suspensionHasta = new Date(hoy.getTime() + 15 * 24 * 60 * 60 * 1000);
+            socio.suspensionHasta = suspensionHasta.toISOString().substring(0, 10);
+            msg.textContent = 'Devolución vencida. Socio suspendido por 15 días.';
+            msg.classList.add('message-error');
+        } else {
+            prestamo.estadoPrestamo = 'DEVUELTO';
+            msg.textContent = 'Devolución registrada correctamente.';
+            msg.classList.add('message-success');
+        }
+    }
+
+    prestamos = prestamos.map(p => p.idPrestamo === prestamo.idPrestamo ? prestamo : p);
+    socios = socios.map(s => s.idSocio === socio.idSocio ? socio : s);
+    ejemplares = ejemplares.map(e => e.idEjemplar === ejemplar.idEjemplar ? ejemplar : e);
+
+    setData('prestamos', prestamos);
+    setData('socios', socios);
+    setData('ejemplares', ejemplares);
+
+    cargarPrestamosVigentesSelect();
+    cargarHistorial();
+}
+
+cargarPrestamosVigentesSelect();
+cargarHistorial();
+</script>
+</body>
+</html>

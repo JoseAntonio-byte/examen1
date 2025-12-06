@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Socios - Biblioteca Escolar</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="main-container">
+    <h2>Registro de Socios</h2>
+
+    <nav>
+        <a href="index.html">Panel</a>
+        <a href="socios.html">Socios</a>
+        <a href="libros.html">Libros</a>
+        <a href="prestamos.html">Préstamos</a>
+        <a href="devoluciones.html">Devoluciones</a>
+    </nav>
+
+    <form id="formSocio" onsubmit="return false;">
+        <label for="dni">DNI</label>
+        <input type="text" id="dni" required>
+
+        <label for="nombre">Nombre completo</label>
+        <input type="text" id="nombre" required>
+
+        <label for="grado">Grado / Curso</label>
+        <input type="text" id="grado" required>
+
+        <label>
+            <input type="checkbox" id="certificado">
+            Presenta certificado de alumno regular
+        </label>
+
+        <button class="btn btn-block" onclick="registrarSocio()">Registrar socio</button>
+    </form>
+
+    <div id="msgSocio" class="message"></div>
+
+    <div class="table-wrapper">
+        <h3>Socios registrados</h3>
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>DNI</th>
+                <th>Nombre</th>
+                <th>Estado</th>
+            </tr>
+            </thead>
+            <tbody id="tablaSocios"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function cargarSocios() {
+    const socios = JSON.parse(localStorage.getItem('socios') || '[]');
+    const cuerpo = document.getElementById('tablaSocios');
+    cuerpo.innerHTML = '';
+    socios.forEach(s => {
+        cuerpo.innerHTML += `
+            <tr>
+                <td>${s.idSocio}</td>
+                <td>${s.dni}</td>
+                <td>${s.nombre}</td>
+                <td>${s.estado}</td>
+            </tr>
+        `;
+    });
+}
+
+function registrarSocio() {
+    const dni = document.getElementById('dni').value.trim();
+    const nombre = document.getElementById('nombre').value.trim();
+    const grado = document.getElementById('grado').value.trim();
+    const certificado = document.getElementById('certificado').checked;
+    const msg = document.getElementById('msgSocio');
+
+    msg.className = 'message';
+
+    if (!dni || !nombre || !grado) {
+        msg.textContent = 'Complete todos los campos.';
+        msg.classList.add('message-error');
+        return;
+    }
+    if (!certificado) {
+        msg.textContent = 'El socio debe presentar certificado de alumno regular.';
+        msg.classList.add('message-error');
+        return;
+    }
+
+    let socios = JSON.parse(localStorage.getItem('socios') || '[]');
+
+    if (socios.some(s => s.dni === dni)) {
+        msg.textContent = 'Ya existe un socio registrado con ese DNI.';
+        msg.classList.add('message-error');
+        return;
+    }
+
+    const nuevoId = socios.length > 0 ? socios[socios.length - 1].idSocio + 1 : 1;
+
+    socios.push({
+        idSocio: nuevoId,
+        dni,
+        nombre,
+        grado,
+        certificado: true,
+        estado: 'HABILITADO',
+        suspensionHasta: null,
+        tieneDeteriorado: false
+    });
+
+    localStorage.setItem('socios', JSON.stringify(socios));
+    msg.textContent = 'Socio registrado correctamente y habilitado.';
+    msg.classList.add('message-success');
+
+    document.getElementById('formSocio').reset();
+    cargarSocios();
+}
+
+cargarSocios();
+</script>
+</body>
+</html>
